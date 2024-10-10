@@ -36,6 +36,7 @@ func newSampleOperatorApplyConfigurationFlags(streams genericiooptions.IOStreams
 
 func newSampleOperatorApplyConfigurationCommand(applyConfigurationFn ApplyConfigurationFunc, streams genericiooptions.IOStreams) *cobra.Command {
 	f := newSampleOperatorApplyConfigurationFlags(streams)
+	f.applyConfigurationFn = applyConfigurationFn
 
 	cmd := &cobra.Command{
 		Use:   "apply-configuration",

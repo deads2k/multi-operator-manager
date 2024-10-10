@@ -41,6 +41,7 @@ func (o *ApplyConfigurationOptions) Run(ctx context.Context) error {
 		return fmt.Errorf("unable to create output directory %q:%v", o.OutputDirectory, err)
 	}
 
+	fmt.Printf("#### 1a  %v\n", o.ApplyConfigurationFn)
 	result, err := o.ApplyConfigurationFn(ctx, o.InputDirectory, o.Now, o.Streams)
 	if err != nil {
 		return err
