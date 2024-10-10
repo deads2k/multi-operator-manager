@@ -81,15 +81,15 @@ func NewApplyConfigurationResult(outputDirectory string, execError error) (Apply
 		stderr:          string(stderrContent),
 		outputDirectory: outputDirectory,
 	}
-	ret.desiredConfigurationCluster, err = NewClusterApplyResult(libraryapplyconfiguration.ClusterTypeConfiguration, outputDirectory)
+	ret.desiredConfigurationCluster, err = libraryapplyconfiguration.NewClusterApplyResult(libraryapplyconfiguration.ClusterTypeConfiguration, outputDirectory)
 	if err != nil {
 		errs = append(errs, fmt.Errorf("failure building %q result: %w", libraryapplyconfiguration.ClusterTypeConfiguration, err))
 	}
-	ret.desiredManagementCluster, err = NewClusterApplyResult(libraryapplyconfiguration.ClusterTypeManagement, outputDirectory)
+	ret.desiredManagementCluster, err = libraryapplyconfiguration.NewClusterApplyResult(libraryapplyconfiguration.ClusterTypeManagement, outputDirectory)
 	if err != nil {
 		errs = append(errs, fmt.Errorf("failure building %q result: %w", libraryapplyconfiguration.ClusterTypeManagement, err))
 	}
-	ret.desiredUserWorkloadCluster, err = NewClusterApplyResult(libraryapplyconfiguration.ClusterTypeUserWorkload, outputDirectory)
+	ret.desiredUserWorkloadCluster, err = libraryapplyconfiguration.NewClusterApplyResult(libraryapplyconfiguration.ClusterTypeUserWorkload, outputDirectory)
 	if err != nil {
 		errs = append(errs, fmt.Errorf("failure building %q result: %w", libraryapplyconfiguration.ClusterTypeUserWorkload, err))
 	}
@@ -156,88 +156,4 @@ func (s *simpleApplyConfigurationResult) DesiredUserWorkloadCluster() (libraryap
 		return nil, s.err
 	}
 	return s.desiredUserWorkloadCluster, nil
-}
-
-// NewClusterApplyResult takes a standard output directory, selects the subdirectory for the clusterType, and consumes the
-// content inside that directory.
-// All files can be either json or yaml.
-func NewClusterApplyResult(clusterType libraryapplyconfiguration.ClusterType, outputDirectory string) (libraryapplyconfiguration.ClusterApplyResult, error) {
-	ret := &libraryapplyconfiguration.SimpleClusterApplyResult{
-		ClusterType: clusterType,
-	}
-
-	clusterTypeDir := filepath.Join(outputDirectory, string(clusterType))
-	applyDir := filepath.Join(clusterTypeDir, "Apply")
-	applyStatusDir := filepath.Join(clusterTypeDir, "ApplyStatus")
-	createDir := filepath.Join(clusterTypeDir, "Create")
-	updateDir := filepath.Join(clusterTypeDir, "Update")
-	updateStatusDir := filepath.Join(clusterTypeDir, "UpdateStatus")
-	deleteDir := filepath.Join(clusterTypeDir, "Delete")
-	allVerbDirs := []string{applyDir, applyStatusDir, createDir, updateDir, updateStatusDir, deleteDir}
-
-	clusterTypeContent, err := os.ReadDir(clusterTypeDir)
-	if err != nil {
-		return nil, fmt.Errorf("unable to read clusterType content clusterType=%q in %q: %w", clusterType, clusterTypeDir, err)
-	}
-
-	errs := []error{}
-	allowedClusterTypeSubDirectories := sets.Set[string]{}
-	for _, verbDir := range allVerbDirs {
-		verb := filepath.Base(verbDir)
-		allowedClusterTypeSubDirectories.Insert(verb)
-
-		currResourceList, err := libraryapplyconfiguration.ResourcesFromDir(verbDir)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("unable to read verb content clusterType=%q verb=%q in %q: %w", clusterType, verb, verbDir, err))
-		}
-		for i, currResource := range currResourceList {
-			currLocation := filepath.Join(verbDir, currResource.Filename)
-			currGVK := currResource.Content.GetObjectKind().GroupVersionKind()
-			currNamespace := currResource.Content.GetNamespace()
-			currName := currResource.Content.GetName()
-			for j, otherResource := range currResourceList {
-				if i == j {
-					continue
-				}
-				otherLocation := filepath.Join(verbDir, otherResource.Filename)
-				otherGVK := otherResource.Content.GetObjectKind().GroupVersionKind()
-				otherNamespace := otherResource.Content.GetNamespace()
-				otherName := otherResource.Content.GetName()
-				if currGVK == otherGVK && currNamespace == otherNamespace && currName == otherName {
-					errs = append(errs, fmt.Errorf("duplicate resource specification GVK=%v namespace=%q name=%q in %q and %q", currGVK, currNamespace, currName, currLocation, otherLocation))
-				}
-			}
-		}
-
-		switch verb {
-		case "Apply":
-			ret.Apply = currResourceList
-		case "ApplyStatus":
-			ret.ApplyStatus = currResourceList
-		case "Create":
-			ret.Create = currResourceList
-		case "Update":
-			ret.Update = currResourceList
-		case "UpdateStatus":
-			ret.UpdateStatus = currResourceList
-		case "Delete":
-			ret.Delete = currResourceList
-		}
-	}
-	for _, clusterTypeSubDir := range clusterTypeContent {
-		if !clusterTypeSubDir.IsDir() {
-			errs = append(errs, fmt.Errorf("unexpected file %q, only verb directory content is allowed", filepath.Join(clusterTypeDir, clusterTypeSubDir.Name())))
-			continue
-		}
-		if !allowedClusterTypeSubDirectories.Has(clusterTypeSubDir.Name()) {
-			errs = append(errs, fmt.Errorf("unexpected directory %q, only verb subdirectories are allowed: %v", filepath.Join(clusterTypeDir, clusterTypeSubDir.Name()), sets.List(allowedClusterTypeSubDirectories)))
-			continue
-		}
-	}
-
-	if len(errs) > 0 {
-		return nil, errors.Join(errs...)
-	}
-
-	return ret, nil
 }

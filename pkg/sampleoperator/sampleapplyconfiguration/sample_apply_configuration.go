@@ -12,13 +12,13 @@ func SampleRunApplyConfiguration(ctx context.Context, inputDirectory string, now
 	// TODO wire up the must-gather reading client
 	ret := &libraryapplyconfiguration.ApplyConfiguration{
 		DesiredConfigurationCluster: &libraryapplyconfiguration.SimpleClusterApplyResult{
-			ClusterType: libraryapplyconfiguration.ClusterTypeConfiguration,
+			clusterType: libraryapplyconfiguration.ClusterTypeConfiguration,
 		},
 		DesiredManagementCluster: &libraryapplyconfiguration.SimpleClusterApplyResult{
-			ClusterType: libraryapplyconfiguration.ClusterTypeManagement,
+			clusterType: libraryapplyconfiguration.ClusterTypeManagement,
 		},
 		DesiredUserWorkloadCluster: &libraryapplyconfiguration.SimpleClusterApplyResult{
-			ClusterType: libraryapplyconfiguration.ClusterTypeUserWorkload,
+			clusterType: libraryapplyconfiguration.ClusterTypeUserWorkload,
 		},
 	}
 

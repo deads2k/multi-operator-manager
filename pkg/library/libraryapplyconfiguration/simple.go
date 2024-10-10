@@ -3,6 +3,7 @@ package libraryapplyconfiguration
 import (
 	"errors"
 	"fmt"
+	"github.com/openshift/library-go/pkg/manifestclient"
 	"io/fs"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -16,6 +17,7 @@ import (
 
 type ClusterApplyResult interface {
 	GetClusterType() ClusterType
+	Requests() (*manifestclient.AllActionsTracker[manifestclient.FileOriginatedSerializedRequest], error)
 
 	ToApply() ([]*Resource, error)
 	ToApplyStatus() ([]*Resource, error)
@@ -72,51 +74,15 @@ var (
 )
 
 type SimpleClusterApplyResult struct {
-	ClusterType ClusterType
+	clusterType ClusterType
 
-	Apply        []*Resource
-	ApplyStatus  []*Resource
-	Create       []*Resource
-	Update       []*Resource
-	UpdateStatus []*Resource
-	Delete       []*Resource
+	allRequests *manifestclient.AllActionsTracker[manifestclient.FileOriginatedSerializedRequest]
 }
 
 type Resource struct {
 	Filename     string
 	ResourceType schema.GroupVersionResource
 	Content      *unstructured.Unstructured
-}
-
-func ResourcesFromDir(location string) ([]*Resource, error) {
-	resources, err := os.ReadDir(location)
-	if err != nil {
-		return nil, fmt.Errorf("unable to read requested dir %q: %w", location, err)
-	}
-
-	currResourceList := []*Resource{}
-	errs := []error{}
-	for _, currFile := range resources {
-		currLocation := filepath.Join(location, currFile.Name())
-		if currFile.IsDir() {
-			errs = append(errs, fmt.Errorf("unexpected directory %q, only json and yaml content is allowed", currLocation))
-			continue
-		}
-		if currFile.Name() == ".gitkeep" {
-			continue
-		}
-		if !strings.HasSuffix(currFile.Name(), ".yaml") && !strings.HasSuffix(currFile.Name(), ".json") {
-			errs = append(errs, fmt.Errorf("unexpected file %q, only json and yaml content is allowed", currLocation))
-		}
-		currResource, err := ResourceFromFile(currLocation, location)
-		if err != nil {
-			errs = append(errs, err)
-			continue
-		}
-		currResourceList = append(currResourceList, currResource)
-	}
-
-	return currResourceList, errors.Join(errs...)
 }
 
 func LenientResourcesFromDirRecursive(location string) ([]*Resource, error) {
@@ -205,29 +171,27 @@ func WriteResource(in *Resource, parentDir string) error {
 }
 
 func (s *SimpleClusterApplyResult) GetClusterType() ClusterType {
-	return s.ClusterType
+	return s.clusterType
 }
 
-func (s *SimpleClusterApplyResult) ToApply() ([]*Resource, error) {
-	return s.Apply, nil
+func (s *SimpleClusterApplyResult) Requests() (*manifestclient.AllActionsTracker[manifestclient.FileOriginatedSerializedRequest], error) {
+	return s.allRequests, nil
 }
 
-func (s *SimpleClusterApplyResult) ToApplyStatus() ([]*Resource, error) {
-	return s.ApplyStatus, nil
-}
+// NewClusterApplyResult takes a standard output directory, selects the subdirectory for the clusterType, and consumes the
+// content inside that directory.
+// All files can be either json or yaml.
+func NewClusterApplyResult(clusterType ClusterType, outputDirectory string) (ClusterApplyResult, error) {
+	clusterTypeDir := filepath.Join(outputDirectory, string(clusterType))
+	mutationRequests, err := manifestclient.ReadMutationDirectory(clusterTypeDir)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read actions for clusterType=%q in %q: %w", clusterType, clusterTypeDir, err)
+	}
 
-func (s *SimpleClusterApplyResult) ToCreate() ([]*Resource, error) {
-	return s.Create, nil
-}
+	ret := &SimpleClusterApplyResult{
+		clusterType: clusterType,
+		allRequests: mutationRequests,
+	}
 
-func (s *SimpleClusterApplyResult) ToUpdate() ([]*Resource, error) {
-	return s.Update, nil
-}
-
-func (s *SimpleClusterApplyResult) ToUpdateStatus() ([]*Resource, error) {
-	return s.UpdateStatus, nil
-}
-
-func (s *SimpleClusterApplyResult) ToDelete() ([]*Resource, error) {
-	return s.Delete, nil
+	return ret, nil
 }
