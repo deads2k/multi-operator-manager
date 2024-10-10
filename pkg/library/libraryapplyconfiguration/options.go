@@ -9,8 +9,6 @@ import (
 	"k8s.io/cli-runtime/pkg/genericiooptions"
 )
 
-type ApplyConfigurationFunc func(ctx context.Context, inputDirectory string, now time.Time, streams genericiooptions.IOStreams) (*ApplyConfiguration, error)
-
 type ApplyConfigurationOptions struct {
 	ApplyConfigurationFn ApplyConfigurationFunc
 
@@ -47,7 +45,7 @@ func (o *ApplyConfigurationOptions) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := result.Validate(); err != nil {
+	if err := ValidateAllDesiredMutationsGetter(result); err != nil {
 		return err
 	}
 

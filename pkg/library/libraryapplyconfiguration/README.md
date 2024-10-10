@@ -1,0 +1,1 @@
+This package is something that is useful for building testing methodology and may reasonably move to library-go eventually.
